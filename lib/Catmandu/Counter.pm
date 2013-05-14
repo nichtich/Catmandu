@@ -15,7 +15,7 @@ sub dec_count {
 }
 
 sub reset_count {
-    my $self = $_[0]; $self->_set_count(0);
+    $_[0]->_set_count(0);
 }
 
 1;

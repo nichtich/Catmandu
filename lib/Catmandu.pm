@@ -1,9 +1,8 @@
 package Catmandu;
 
-use Catmandu::Sane;
-use Catmandu::Env;
+use Catmandu::Sane qw(:default :path);
 use Catmandu::Util qw(:is);
-use File::Spec;
+use Catmandu::Env;
 
 =head1 NAME
 
@@ -181,14 +180,14 @@ Set the location of the default configuration file to a new path.
 =cut
 
 sub default_load_path {
-    my ($class, $path) = @_;
+    my ($pkg, $path) = @_;
     state $default_path;
-    $default_path = $path if defined $path;
-    $default_path //= do {
-        my $script = File::Spec->rel2abs($0);
-        my ($script_vol, $script_path, $script_name) = File::Spec->splitpath($script);
-        $script_path;
+    if (defined $path) {
+        $default_path = $path;
+    } else {
+        $default_path //= path($0)->parent(2)->realpath;
     }
+    $default_path;
 }
 
 =head2 load

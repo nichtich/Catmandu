@@ -1,10 +1,12 @@
 package Catmandu::Env;
 
 use namespace::clean;
-use Catmandu::Sane;
-use Catmandu::Util qw(require_package use_lib read_yaml read_json :is :check);
+use Catmandu::Sane qw(:default :path);
+use Catmandu::Util qw(require_package :is :check);
 use Catmandu::Fix;
 use File::Spec;
+use Config::Onion;
+use lib;
 use Moo;
 
 with 'MooX::Log::Any';
@@ -18,15 +20,9 @@ has load_paths => (
     },
 );
 
-has roots => (
-    is      => 'ro',
-    default => sub { [] },
-);
-
-has config => (is => 'ro', default => sub { +{} });
+has config => (is => 'rwp', default => sub { +{} });
 has stores => (is => 'ro', default => sub { +{} });
 has fixers => (is => 'ro', default => sub { +{} });
-
 has default_store => (is => 'ro', default => sub { 'default' });
 has default_fixer => (is => 'ro', default => sub { 'default' });
 has default_importer => (is => 'ro', default => sub { 'default' });
@@ -34,61 +30,54 @@ has default_exporter => (is => 'ro', default => sub { 'default' });
 has default_importer_package => (is => 'ro', default => sub { 'JSON' });
 has default_exporter_package => (is => 'ro', default => sub { 'JSON' });
 has store_namespace => (is => 'ro', default => sub { 'Catmandu::Store' });
-has fixes_namespace => (is => 'ro', default => sub { 'Catmandu::Fix' }); # TODO unused
+has fixes_namespace => (is => 'ro', default => sub { 'Catmandu::Fix' });
 has importer_namespace => (is => 'ro', default => sub { 'Catmandu::Importer' });
 has exporter_namespace => (is => 'ro', default => sub { 'Catmandu::Exporter' });
 
 sub BUILD {
     my ($self) = @_;
 
-    for my $load_path (@{$self->load_paths}) {
-        my @dirs = grep length, File::Spec->splitdir($load_path);
+    my @dirs = @{$self->load_paths};
+    my @config_dirs;
+    my @lib_dirs;
 
-        for (; @dirs; pop @dirs) {
-            my $path = File::Spec->catdir(File::Spec->rootdir, @dirs);
-
-            opendir my $dh, $path or last;
-
-            my @files = sort
-                        grep { -f -r File::Spec->catfile($path, $_) }
-                        grep { /^catmandu\./ }
-                        readdir $dh;
-            for my $file (@files) {
-                if (my ($keys, $ext) = $file =~ /^catmandu(.*)\.(pl|yaml|yml|json)$/) {
-                    $keys = substr $keys, 1 if $keys; # remove leading dot
-
-                    $file = File::Spec->catfile($path, $file);
-
-                    my $config = $self->config;
-                    my $c;
-
-                    $config = $config->{$_} ||= {} for split /\./, $keys;
-
-                    given ($ext) {
-                        when ('pl')    { $c = do $file }
-                        when (/ya?ml/) { $c = read_yaml($file) }
-                        when ('json')  { $c = read_json($file) }
-                    }
-                    $config->{$_} = $c->{$_} for keys %$c;
-                }
-            }
-
-            if (@files) {
-                unshift @{$self->roots}, $path;
-
-                my $lib_path = File::Spec->catdir($path, 'lib');
-                if (-d -r $lib_path) {
-                    use_lib $lib_path;
-                }
-
-                last;
-            }
+    for my $dir (@dirs) {
+        if (! -d $dir) {
+            Catmandu::Error->throw("load path $dir doesn't exist");
         }
+
+        my $config_dir = path($dir, 'config');
+        my $lib_dir = path($dir, 'lib');
+
+        if (-d -r $config_dir) {
+            push @config_dirs, $config_dir;
+        }
+        if (-d -r $lib_dir) {
+            push @lib_dirs, $lib_dir;
+        }
+    }
+
+    if (@config_dirs) {
+        my $config = Config::Onion->new;
+        $config->load_glob(reverse @config_dirs);
+        $self->_set_config($config->get);
+    }
+
+    if (@lib_dirs) {
+        lib->import(@lib_dirs);
     }
 }
 
+sub load_path {
+    $_[0]->load_paths->[0];
+}
+
+sub roots {
+    goto &load_paths;
+}
+
 sub root {
-    my ($self) = @_; $self->roots->[0];
+    goto &load_path;
 }
 
 sub store {

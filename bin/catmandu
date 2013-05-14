@@ -1,10 +1,10 @@
 #!/usr/bin/env perl
 
+use Catmandu::Sane qw(:path);
 use Catmandu;
 use Catmandu::CLI;
-use Cwd ();
 
-Catmandu->default_load_path(Cwd::getcwd);
+Catmandu->default_load_path(path('.')->absolute);
 Catmandu::CLI->run;
 
 =head1 NAME
