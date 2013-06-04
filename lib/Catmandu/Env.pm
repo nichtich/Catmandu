@@ -1,7 +1,7 @@
 package Catmandu::Env;
 
 use namespace::clean;
-use Catmandu::Sane qw(:default :path);
+use Catmandu::Sane;
 use Catmandu::Util qw(require_package :is :check);
 use Catmandu::Fix;
 use File::Spec;
@@ -37,21 +37,16 @@ has exporter_namespace => (is => 'ro', default => sub { 'Catmandu::Exporter' });
 sub BUILD {
     my ($self) = @_;
 
-    my @dirs = @{$self->load_paths};
-    my @config_dirs;
+    my @config_dirs = @{$self->load_paths};
     my @lib_dirs;
 
-    for my $dir (@dirs) {
+    for my $dir (@config_dirs) {
         if (! -d $dir) {
             Catmandu::Error->throw("load path $dir doesn't exist");
         }
 
-        my $config_dir = path($dir, 'config');
-        my $lib_dir = path($dir, 'lib');
+        my $lib_dir = File::Spec->catdir($dir, 'lib');
 
-        if (-d -r $config_dir) {
-            push @config_dirs, $config_dir;
-        }
         if (-d -r $lib_dir) {
             push @lib_dirs, $lib_dir;
         }
@@ -59,7 +54,7 @@ sub BUILD {
 
     if (@config_dirs) {
         my $config = Config::Onion->new;
-        $config->load_glob(reverse @config_dirs);
+        $config->load_glob(map { File::Spec->catfile($_, 'catmandu*') } reverse @config_dirs);
         $self->_set_config($config->get);
     }
 

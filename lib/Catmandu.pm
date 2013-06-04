@@ -1,8 +1,9 @@
 package Catmandu;
 
-use Catmandu::Sane qw(:default :path);
+use Catmandu::Sane;
 use Catmandu::Util qw(:is);
 use Catmandu::Env;
+use Cwd ();
 
 =head1 NAME
 
@@ -185,7 +186,7 @@ sub default_load_path {
     if (defined $path) {
         $default_path = $path;
     } else {
-        $default_path //= path($0)->parent(2)->realpath;
+        $default_path //= Cwd::realpath(File::Spec->catfile(File::Spec->rel2abs($0), '..', '..'));
     }
     $default_path;
 }
